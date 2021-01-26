@@ -14,10 +14,13 @@ namespace SimulatedDevice
         private static DeviceClient s_deviceClient;
         private static readonly TransportType s_transportType = TransportType.Mqtt;
         private static string s_connectionString = "HostName=mingyuHub.azure-devices.net;DeviceId=device01;SharedAccessKey=TZnqr611U4ms31DDB1uC9H9Esm/rOeCJ6K8XXXOyZzU=";
+        private static TimeSpan s_telemetryInterval = TimeSpan.FromSeconds(1); // Seconds
 
         private static async Task Main(string[] args)
         {
             s_deviceClient = DeviceClient.CreateFromConnectionString(s_connectionString, s_transportType);
+            // Method 등록
+            await s_deviceClient.SetMethodHandlerAsync("doThat", doThat, null);
             Console.WriteLine("Press control-C to exit.");
             using var cts = new CancellationTokenSource();
             Console.CancelKeyPress += (sender, eventArgs) =>
@@ -55,6 +58,26 @@ namespace SimulatedDevice
                 await s_deviceClient.SendEventAsync(message);
                 Console.WriteLine($"{DateTime.Now} > Sending message: {messageBody}");
                 await Task.Delay(1000);
+            }
+        }
+
+        private static Task<MethodResponse> doThat(MethodRequest methodRequest, object userContext)
+        {
+            Console.WriteLine("Do That!");
+            var data = Encoding.UTF8.GetString(methodRequest.Data);
+            if (int.TryParse(data, out int telemetryIntervalInSeconds))
+            {
+                s_telemetryInterval = TimeSpan.FromSeconds(telemetryIntervalInSeconds);
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"Telemetry interval set to {s_telemetryInterval}");
+                Console.ResetColor();
+                string result = $"{{\"result\":\"Executed direct method: {methodRequest.Name}\"}}";
+                return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes(result), 200));
+            }
+            else
+            {
+                string result = "{\"result\":\"Invalid parameter\"}";
+                return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes(result), 400));
             }
         }
     }
